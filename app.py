@@ -7,7 +7,7 @@ from tavily import TavilyClient
 st.set_page_config(
     page_title="Veritas AI",
     page_icon="🛡️",
-    layout="centered", # Centralized layout like ChatGPT
+    layout="centered", # Layout centralizado estilo ChatGPT
     initial_sidebar_state="collapsed"
 )
 
@@ -29,7 +29,7 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         font-size: 2.5rem !important;
         text-align: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.2rem;
     }
     
     /* Subtitle Styling */
@@ -37,8 +37,17 @@ st.markdown("""
         text-align: center;
         color: #6B7280;
         font-family: 'Inter', sans-serif;
-        margin-bottom: 2rem;
+        margin-bottom: 0.5rem;
         font-size: 1rem;
+    }
+    
+    /* Developer Credit Styling */
+    .dev-credit {
+        text-align: center;
+        color: #9CA3AF;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.85rem;
+        margin-bottom: 2.5rem;
     }
     
     /* Chat Message Styling */
@@ -47,7 +56,7 @@ st.markdown("""
         border: none;
     }
     
-    /* Remove 'Deploy' and Hamburger menu for clean look */
+    /* Hide Streamlit default elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -93,6 +102,9 @@ if "messages" not in st.session_state:
 st.markdown("<h1>Veritas AI</h1>", unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Real-time Truth Engine powered by Llama 3.3 & Tavily</p>', unsafe_allow_html=True)
 
+# ASSINATURA DO DESENVOLVEDOR (BRANDING)
+st.markdown('<div class="dev-credit">Engineered by <strong>Rodrigo Niskier</strong> | Integrity Protocol v2.0</div>', unsafe_allow_html=True)
+
 # --- Display Chat History ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -113,37 +125,43 @@ if prompt := st.chat_input("Enter a claim to verify or a topic to investigate...
         with st.spinner("Analyzing web data..."):
             try:
                 # A. Search Step (The Eyes)
+                # Faz a busca para pegar fatos reais
                 search_result = client_tavily.search(query=prompt, search_depth="advanced")
+                
+                # Formata os resultados para a IA ler
                 search_context = "\n".join([f"- {res['content']} (URL: {res['url']})" for res in search_result['results']])
                 
                 # B. Reasoning Step (The Brain)
-                # Note: We send history + new context to maintain conversation flow
+                # Prepara o histórico da conversa + Prompt do Sistema
                 messages = [
                     {"role": "system", "content": SYSTEM_PROMPT}
                 ]
-                # Add history for context
-                for m in st.session_state.messages[-5:]: # Keep last 5 turns for context window efficiency
+                
+                # Adiciona as últimas 5 mensagens para manter o contexto sem estourar o limite
+                for m in st.session_state.messages[-5:]:
                     messages.append({"role": m["role"], "content": m["content"]})
                 
-                # Inject the specific search data for THIS turn
+                # Injeta os dados da busca APENAS na última mensagem (a atual)
                 messages[-1]["content"] = f"USER QUERY: {prompt}\n\nREAL-TIME SEARCH DATA: {search_context}"
 
+                # Chama a Groq com o Modelo Atualizado (Llama 3.3)
                 completion = client_groq.chat.completions.create(
-                    model="llama-3.3-70b-versatile", # NEWEST SUPPORTED MODEL
+                    model="llama-3.3-70b-versatile", 
                     messages=messages,
-                    temperature=0.3,
+                    temperature=0.3, # Baixa temperatura para ser mais factual
                     stream=True 
                 )
                 
-                # C. Streaming Response (Visual Effect like ChatGPT)
+                # C. Streaming Response (Efeito visual de digitação)
                 for chunk in completion:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
                         message_placeholder.markdown(full_response + "▌")
                 
+                # Finaliza removendo o cursor
                 message_placeholder.markdown(full_response)
                 
-                # Save Assistant Response to Memory
+                # Salva na memória
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
 
             except Exception as e:
